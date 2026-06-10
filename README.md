@@ -1,76 +1,154 @@
-
 # 🚴‍♂️ Divvy Bike-Share Cloud Analytics Pipeline (AWS & Tableau)
 
 ## 📌 Project Overview
-This project builds an end-to-end, serverless cloud data pipeline on **AWS** to store, transform, and analyze historical bike-share trip data for **Cyclistic**, a fictional bike-share company operating in Chicago. 
 
-The primary business objective is to solve a core marketing challenge set by the Director of Marketing, Lily Moreno: **Understand how casual riders and annual members use Cyclistic bikes differently**. These data-driven insights will be utilized by the marketing analytics team to design strategies aimed at converting high-value casual riders into profitable annual members.
+This project builds an end-to-end, serverless cloud data pipeline on **AWS** to store, transform, and analyze historical bike-share trip data for **Divvy**, a bike-share company operating in Chicago.
 
-Instead of using desktop spreadsheet tools that crash under massive datasets, this solution implements a decoupled cloud architecture using **Amazon S3, AWS Glue, Amazon Athena (Presto SQL), and Tableau Public** to process full-year data efficiently.
+The primary business objective is to solve a core marketing challenge set by the Director of Marketing, Lily Moreno:
+
+> **Understand how casual riders and annual members use Cyclistic bikes differently.**
+
+These data-driven insights help the marketing analytics team design strategies aimed at converting high-value casual riders into profitable annual members.
+
+Instead of relying on desktop spreadsheet tools that struggle with large datasets, this solution leverages a cloud-native architecture using **Amazon S3, AWS Glue, Amazon Athena (Presto SQL), and Tableau Public** to process and analyze a full year of ride data efficiently.
 
 ---
 
 ## 🏗️ Data Pipeline Architecture
-The system architecture decouples storage, metadata cataloging, compute analytics, and business intelligence visualization layer.
 
-### 📐 Text-Based Architecture Flow
+The solution follows a serverless architecture that separates storage, metadata management, analytics processing, and business intelligence visualization.
+
+### 📐 Architecture Flow
+
 ```text
 ┌──────────────────────┐      ┌─────────────────────────┐      ┌────────────────────────┐
 │  Raw Data (.CSV)     │ ───> │  Amazon S3 (Raw Zone)   │ ───> │   AWS Glue Crawler     │
-│  Historical Trips    │      │  s3://.../raw-data/     │      │   Automated Discovery  │
+│ Historical Trips     │      │  s3://.../raw-data/     │      │ Automated Discovery    │
 └──────────────────────┘      └─────────────────────────┘      └────────────────────────┘
                                                                            │
                                                                            ▼
 ┌──────────────────────┐      ┌─────────────────────────┐      ┌────────────────────────┐
 │ Tableau Public BI    │ <─── │ Download Aggregated CSV │ <─── │ AWS Glue Data Catalog  │
-│ Executive Dashboard  │      │ s3://.../query-results/ │      │ Metadata Base Schema   │
+│ Executive Dashboard  │      │ s3://.../query-results/ │      │ Metadata Repository    │
 └──────────────────────┘      └─────────────────────────┘      └────────────────────────┘
                                            ▲                               │
                                            │                               ▼
-                                           └─────────────────────── [ Amazon Athena ]
-                                                                     Presto SQL ETL Engine
-                                                                     (CTAS Transformations)
+                                           └───────────────────── Amazon Athena
+                                                                  (Presto SQL Engine)
+                                                                  CTAS Transformations
+```
 
+---
 
-🛠️ Data Transformation & Cleaning (ETL)
-Data cleaning and feature engineering were executed completely in the cloud using Amazon Athena via CTAS (Create Table As Select) statements. This approach shifted the processing load to AWS serverless infrastructure, bypassing local memory limits.
+## 🛠️ Data Transformation & Cleaning (ETL)
 
-🧹 Data Cleaning Steps:
-Outlier Removal: Filtered out negative trip durations, test station entries, and trips lasting less than 60 seconds or longer than 24 hours.
+Data cleaning and feature engineering were performed entirely in the cloud using **Amazon Athena CTAS (Create Table As Select)** statements. This approach shifted processing workloads away from local machines and leveraged AWS serverless infrastructure.
 
-Missing Value Handling: Standardized or dropped rows with missing critical spatial details (e.g., blank start/end station names and coordinates).
+### 🧹 Data Cleaning Steps
 
-Feature Engineering: * Extracted ride_length by calculating the difference between end and start timestamps.
+#### 1. Outlier Removal
 
-Derived day_of_week and month attributes to analyze temporal behavior trends.
+* Removed trips shorter than **60 seconds**
+* Removed trips longer than **24 hours**
+* Filtered negative trip durations
+* Excluded invalid or test station records
 
-Schema Optimization: Dropped redundant or highly sparse fields to reduce column-store scan costs for subsequent queries.
+#### 2. Missing Value Handling
 
-⚡ Performance Optimization & Benchmarking
-1. Cloud Compute vs. Local Infrastructure
-Running analytics queries via Amazon Athena demonstrated a significant performance increase compared to running the same workloads on a local database instance like pgAdmin/PostgreSQL.
+* Removed records with missing critical station information
+* Standardized incomplete location fields where appropriate
 
-Local Bottleneck: Local queries suffered from disk I/O bottlenecks and high CPU utilization.
+#### 3. Feature Engineering
 
-Cloud Solution: Athena’s distributed Presto engine executed parallelized column-scans, cutting query execution time drastically and handling millions of rows seamlessly.
+* Created **trip_duration_min**
+* Derived **day_of_week**
+* Derived **month**
+* Generated additional analytical fields for behavioral analysis
 
-2. Business Intelligence Layer Acceleration
-To prevent slow dashboard loading times on Tableau, the connection strategy was optimized:
+#### 4. Schema Optimization
 
-The Strategy: Avoided live queries back to the database for every interactive filter toggle.
+* Removed redundant columns
+* Reduced unnecessary data scans
+* Improved query performance and cost efficiency
 
-The Implementation: Built an Extract Connection to pull pre-aggregated, cleaned data directly into Tableau's in-memory data engine.
+---
 
-The Result: Maximized dashboard rendering speed, removed query latency, and created a seamless interactive user experience for stakeholders.
+## ⚡ Performance Optimization & Benchmarking
 
+### 1. Cloud Compute vs. Local Infrastructure
 
-Summary of Findings:
-Ride Duration: Casual riders tend to take significantly longer trips on average compared to members, suggesting leisure or tourism usage.
+Running analytical workloads on **Amazon Athena** delivered significantly better performance than processing the same dataset locally.
 
-Temporal Patterns: Members show massive activity spikes during typical weekday commuting hours (8 AM and 5 PM), while casual riders dominate weekend afternoons.
+#### Local Challenges
 
-Station Popularity: Casual riders cluster heavily around coastal and tourist-heavy stations, whereas members are evenly distributed across commercial and residential zones.
+* High CPU utilization
+* Disk I/O bottlenecks
+* Slow query execution on large datasets
 
+#### Cloud Advantages
 
+* Distributed query execution
+* Parallel columnar scans
+* Efficient processing of millions of records
+* No infrastructure management required
+
+---
+
+### 2. Tableau Performance Optimization
+
+To ensure a responsive dashboard experience, Tableau was configured using optimized extracts instead of live database connections.
+
+#### Strategy
+
+Avoid sending a new database query every time a dashboard filter changes.
+
+#### Implementation
+
+* Exported cleaned and aggregated datasets
+* Connected Tableau using **Extract Mode**
+* Leveraged Tableau's in-memory engine
+
+#### Result
+
+* Faster dashboard rendering
+* Reduced query latency
+* Improved stakeholder experience
+
+---
+
+## 📊 Key Business Insights
+
+### ⏱️ Ride Duration
+
+Casual riders typically take longer trips than annual members, indicating a stronger leisure and recreational usage pattern.
+
+### 📅 Temporal Patterns
+
+* Members show peak usage during weekday commuting hours.
+* Casual riders are most active during weekends and afternoons.
+
+### 📍 Station Popularity
+
+* Casual riders are concentrated around tourist and waterfront stations.
+* Members are more evenly distributed across residential and commercial areas.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer         | Technology     |
+| ------------- | -------------- |
+| Cloud Storage | Amazon S3      |
+| Data Catalog  | AWS Glue       |
+| Query Engine  | Amazon Athena  |
+| SQL Engine    | Presto SQL     |
+| Visualization | Tableau Public |
+| File Format   | CSV / Parquet  |
+
+---
+
+## 🎯 Business Outcome
+
+The analysis clearly demonstrates distinct behavioral differences between casual riders and annual members. These findings can support targeted marketing campaigns designed to increase annual membership conversions and improve long-term customer retention.
 
 
